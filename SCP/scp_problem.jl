@@ -20,10 +20,6 @@ mutable struct SCPProblem
     omega
     Delta
 
-    # Number of linear control constraints and second-order cone control constraints, respectively
-    dimLinearConstraintsU
-    dimSecondOrderConeConstraintsU
-
     # Model class
     solver_model
 
@@ -49,16 +45,12 @@ function SCPProblem(model, N, Xp, Up, solver=Ipopt.Optimizer)
     omega = model.omega0
     Delta = model.Delta0
 
-    dimLinearConstraintsU          = model.dimLinearConstraintsU
-    dimSecondOrderConeConstraintsU = model.dimSecondOrderConeConstraintsU
-
     solver_model = Model(with_optimizer(Ipopt.Optimizer, print_level=0, max_iter=1000, tol=1e-13))
     X = @variable(solver_model, X[1:model.x_dim,1:N  ])
     U = @variable(solver_model, U[1:model.u_dim,1:N-1])
 
     SCPProblem(N, dt,
                  omega, Delta, 
-                 dimLinearConstraintsU, dimSecondOrderConeConstraintsU,
                  solver_model,
                  X, U, Xp, Up,
                  [])
@@ -116,21 +108,21 @@ function define_nonconvex_cost(scp_problem::SCPProblem, model)
     obs2_penalty = obstacle_potential_penalties(model, solver_model,
                                                 X, U, Xp, Up, 2, "sphere")
 
-    obs3_penalty = obstacle_potential_penalties(model, solver_model,
-                                                X, U, Xp, Up, 3, "sphere")
-    obs4_penalty = obstacle_potential_penalties(model, solver_model,
-                                                X, U, Xp, Up, 4, "sphere")
-    obs5_penalty = obstacle_potential_penalties(model, solver_model,
-                                                X, U, Xp, Up, 5, "sphere")
-    obs6_penalty = obstacle_potential_penalties(model, solver_model,
-                                                X, U, Xp, Up, 6, "sphere")
+    # obs3_penalty = obstacle_potential_penalties(model, solver_model,
+    #                                             X, U, Xp, Up, 3, "sphere")
+    # obs4_penalty = obstacle_potential_penalties(model, solver_model,
+    #                                             X, U, Xp, Up, 4, "sphere")
+    # obs5_penalty = obstacle_potential_penalties(model, solver_model,
+    #                                             X, U, Xp, Up, 5, "sphere")
+    # obs6_penalty = obstacle_potential_penalties(model, solver_model,
+    #                                             X, U, Xp, Up, 6, "sphere")
 
     # @NLobjective(scp_problem.solver_model, Min, trueNLcost + obs1_penalty) 
-    # @NLobjective(scp_problem.solver_model, Min, trueNLcost + 
-    #                                             obs1_penalty + obs2_penalty)
     @NLobjective(scp_problem.solver_model, Min, trueNLcost + 
-                                                obs1_penalty + obs2_penalty + 
-                                                obs3_penalty + obs4_penalty + obs5_penalty + obs6_penalty)
+                                                obs1_penalty + obs2_penalty)
+    # @NLobjective(scp_problem.solver_model, Min, trueNLcost + 
+    #                                             obs1_penalty + obs2_penalty + 
+    #                                             obs3_penalty + obs4_penalty + obs5_penalty + obs6_penalty)
 end
 
 
@@ -209,6 +201,7 @@ end
 function define_constraints(scp_problem::SCPProblem, model)
     add_initial_constraints(scp_problem, model)
     add_final_constraints(scp_problem, model)
+    add_control_constraints(scp_problem, model)
     add_dynamics_constraints(scp_problem, model)
     add_trust_region_constraints(scp_problem, model)
 end
@@ -241,6 +234,22 @@ function add_final_constraints(scp_problem::SCPProblem, model)
     @constraint(solver_model,  constraint .== 0.)
     # @constraint(solver_model,  constraint - epsilon .<= 0.)
     # @constraint(solver_model, -constraint - epsilon .<= 0.)
+end
+
+function add_control_constraints(scp_problem::SCPProblem, model)
+    solver_model = scp_problem.solver_model
+    x_dim, u_dim = model.x_dim, model.u_dim
+    X, U, Xp, Up = scp_problem.X, scp_problem.U, scp_problem.Xp, scp_problem.Up
+    N, dt        = length(X[1,:]), scp_problem.dt
+
+    for k = 1:N-1
+        for i = 1:u_dim
+            constraint_max = control_max_convex_constraints(model, X, U, [], [], k, i)
+            constraint_min = control_min_convex_constraints(model, X, U, [], [], k, i)
+            @constraint(solver_model,  constraint_max <= 0.)
+            @constraint(solver_model,  constraint_min <= 0.)
+        end
+    end
 end
 
 

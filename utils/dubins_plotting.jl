@@ -66,7 +66,7 @@ function plt_solutions(scp_problem::SCPProblem, model, X_all, U_all;
     plt.xlim(xlims)
     plt.ylim(ylims)
     if B_plot_labels 
-        plt.legend(loc="upper left", fontsize=27.5, 
+        plt.legend(loc="upper left", fontsize=23.5, 
                                       labelspacing=0.1)
     end
     plt.grid(alpha=0.3)
@@ -189,6 +189,77 @@ function plt_final_angle_accel(scp_problem::SCPProblem, model, X, U)
     plt.ylabel(L"$u [m/s^2]$")
     plt.grid(alpha=0.3)
     plt.draw()
+
+    return fig
+end
+
+function plt_controls(scp_problem::SCPProblem, model, X_all, U_all;
+                        xlims=[-0.5,3.], ylims=[0.0,6.], figsize=(8,6), B_plot_labels=true)
+    N = length(X_all)
+    idx = [1,2]
+
+    fig = plt.figure(figsize=figsize)
+    ax  = plt.gca()
+
+    # Plot SCP solutions
+    times = collect(range(0,stop=X_all[1][end,end],length=scp_problem.N))[1:scp_problem.N-1]
+    t_max = X_all[1][end,end]
+    plt.plot(times, U_all[1][1,:], "--",
+                    label="Initializer", linewidth=3, color="b")
+    for iter = 2:length(X_all)#-3
+        X, U = X_all[iter], U_all[iter]
+        times = collect(range(0,stop=X[end,end],length=scp_problem.N))[1:scp_problem.N-1]
+        plt.plot(times, U[1,:], "o--",
+                        label="Iterate $(iter - 1)", linewidth=2, markersize=7)
+        t_max = maximum([t_max, X[end,end]])
+    end
+
+    # max/min control
+    a_min, a_max = model.uMin[1], model.uMax[1]
+    plt.plot([0,t_max], a_max*ones(2), 
+                    color="r", linestyle="dashed", linewidth=2)
+    plt.fill_between([0,t_max], a_max*ones(2), 0.3, 
+                        color="r", alpha=0.2)
+    plt.plot([0,t_max], a_min*ones(2), 
+                    color="r", linestyle="dashed", linewidth=2)
+    plt.fill_between([0,t_max], a_min*ones(2), -0.3, 
+                        color="r", alpha=0.2,
+                        label="Control bounds")
+
+
+    # # initial / final conditions
+
+    # plt.scatter(model.x_init[idx[1]], model.x_init[idx[2]], color="black")
+    # plt.scatter(model.x_final[idx[1]], model.x_final[idx[2]], color="black")
+
+    # # Plot obstacles
+    # for obs_i = 1:length(model.obstacles)
+    #     p_obs, obs_radius = model.obstacles[obs_i][1], model.obstacles[obs_i][2]
+    #     plt_circle(ax, p_obs[idx], obs_radius; color="r", alpha=0.3)
+    # end
+
+    # Settings / Style / Parameters
+    PyPlot.rc("text", usetex=true)
+    rcParams = PyDict(plt.matplotlib["rcParams"])
+    rcParams["font.size"] = 30
+    rcParams["font.family"] = "Helvetica"
+    plt.xlim(xlims)
+    plt.ylim(ylims)
+    if B_plot_labels 
+        plt.legend(bbox_to_anchor=(1, 0.75), fontsize=23.5, 
+                                      labelspacing=0.1)
+    end
+    plt.grid(alpha=0.3)
+    # plt.xticks([0,1,2,3])
+    # plt.yticks([0,1,2,3])
+
+    plt.xlim([-0.1,t_max+0.1])
+    plt.ylim([-0.32,0.32])
+
+    plt.xlabel(L"$t$")
+    plt.ylabel(L"$u$")
+
+    # plt.draw()
 
     return fig
 end

@@ -26,14 +26,14 @@ mutable struct DubinsFree
     B
 
     # Problem settings
-    dimLinearConstraintsU
-    dimSecondOrderConeConstraintsU
     x_init
     x_final
     tf_guess
     tf
     xMin
     xMax
+    uMin
+    uMax
     v
     k
 
@@ -69,8 +69,6 @@ function DubinsFree()
     B_free_final_time  = true # ALWAYS TRUE
     B_free_final_angle = false
 
-    dimLinearConstraintsU = 0
-    dimSecondOrderConeConstraintsU = 0
     x_init  = [ 0.; 0; 0]
     x_final = [ 2.; 3; 0]
     tf_guess = 3. # guess
@@ -78,6 +76,8 @@ function DubinsFree()
     myInf = 1.0e6 # Adopted to detect initial and final condition-free state variables
     xMin = [-100., -100., -2*pi]
     xMax = [ 100.,  100.,  2*pi]
+    uMin = [-0.25]
+    uMax = [ 0.25]
     true_cost_weight = 1.
 
     Delta0 = 3.
@@ -98,10 +98,10 @@ function DubinsFree()
 
     DubinsFree(x_dim, u_dim,
              [], [], [],
-             dimLinearConstraintsU, dimSecondOrderConeConstraintsU, 
              x_init, x_final, 
              tf_guess, tf, 
              xMin, xMax,
+             uMin, uMax,
              v, k,
              B_free_final_time, B_free_final_angle,
              eps_obstacles,
@@ -136,7 +136,7 @@ function initialize_trajectory(model::DubinsFree, N::Int)
   X[1:3,:] = hcat(range(x_init, stop=x_final, length=N)...)
   X[end,:] .= model.tf_guess
 
-  U = zeros(u_dim, N-1)
+  U = zeros(u_dim, N-1) .+ 1e-3
 
   return X, U
 end
@@ -184,12 +184,12 @@ end
 
 # Method that gathers all the linear control constraints
 
-function control_linear_constraints(model::DubinsFree, X, U, Xp, Up, k, i)
-    return 0.
+function control_max_convex_constraints(model::DubinsFree, X, U, Xp, Up, k, i)
+    return ( U[i, k] - model.uMax[i] )
 end
 
-function control_second_order_cone_constraints(model::DubinsFree, X, U, Xp, Up, k, i)
-    throw(MethodError("[DubinsFree.jl::control_second_order_cone_constraints] No 2nd order constraints for this system."))
+function control_min_convex_constraints(model::DubinsFree, X, U, Xp, Up, k, i)
+    return ( model.uMin[i] - U[i, k] )
 end
 
 
@@ -412,23 +412,23 @@ function define_obs_potential_jump_NL_functions(model::DubinsFree, solver_model,
     obsPotFuncGrad2 = (g, p1,p2) -> obstacle_potentialSphere_penalty_grad(model, g, [p1,p2], pos_obs2, radius2, alpha)
     register(solver_model, :obsPotFunc2, 2, obsPotFunc2, obsPotFuncGrad2)
 
-    # 3-6 obstacles
-    pos_obs3, radius3 = model.obstacles[3][1], model.obstacles[3][2]
-    obsPotFunc3     = (p1,p2)    -> obstacle_potentialSphere_penalty(     model,    [p1,p2], pos_obs3, radius3, alpha)
-    obsPotFuncGrad3 = (g, p1,p2) -> obstacle_potentialSphere_penalty_grad(model, g, [p1,p2], pos_obs3, radius3, alpha)
-    register(solver_model, :obsPotFunc3, 2, obsPotFunc3, obsPotFuncGrad3)
-    pos_obs4, radius4 = model.obstacles[4][1], model.obstacles[4][2]
-    obsPotFunc4     = (p1,p2)    -> obstacle_potentialSphere_penalty(     model,    [p1,p2], pos_obs4, radius4, alpha)
-    obsPotFuncGrad4 = (g, p1,p2) -> obstacle_potentialSphere_penalty_grad(model, g, [p1,p2], pos_obs4, radius4, alpha)
-    register(solver_model, :obsPotFunc4, 2, obsPotFunc4, obsPotFuncGrad4)
-    pos_obs5, radius5 = model.obstacles[5][1], model.obstacles[5][2]
-    obsPotFunc5     = (p1,p2)    -> obstacle_potentialSphere_penalty(     model,    [p1,p2], pos_obs5, radius5, alpha)
-    obsPotFuncGrad5 = (g, p1,p2) -> obstacle_potentialSphere_penalty_grad(model, g, [p1,p2], pos_obs5, radius5, alpha)
-    register(solver_model, :obsPotFunc5, 2, obsPotFunc5, obsPotFuncGrad5)
-    pos_obs6, radius6 = model.obstacles[6][1], model.obstacles[6][2]
-    obsPotFunc6     = (p1,p2)    -> obstacle_potentialSphere_penalty(     model,    [p1,p2], pos_obs6, radius6, alpha)
-    obsPotFuncGrad6 = (g, p1,p2) -> obstacle_potentialSphere_penalty_grad(model, g, [p1,p2], pos_obs6, radius6, alpha)
-    register(solver_model, :obsPotFunc6, 2, obsPotFunc6, obsPotFuncGrad6)
+    # # 3-6 obstacles
+    # pos_obs3, radius3 = model.obstacles[3][1], model.obstacles[3][2]
+    # obsPotFunc3     = (p1,p2)    -> obstacle_potentialSphere_penalty(     model,    [p1,p2], pos_obs3, radius3, alpha)
+    # obsPotFuncGrad3 = (g, p1,p2) -> obstacle_potentialSphere_penalty_grad(model, g, [p1,p2], pos_obs3, radius3, alpha)
+    # register(solver_model, :obsPotFunc3, 2, obsPotFunc3, obsPotFuncGrad3)
+    # pos_obs4, radius4 = model.obstacles[4][1], model.obstacles[4][2]
+    # obsPotFunc4     = (p1,p2)    -> obstacle_potentialSphere_penalty(     model,    [p1,p2], pos_obs4, radius4, alpha)
+    # obsPotFuncGrad4 = (g, p1,p2) -> obstacle_potentialSphere_penalty_grad(model, g, [p1,p2], pos_obs4, radius4, alpha)
+    # register(solver_model, :obsPotFunc4, 2, obsPotFunc4, obsPotFuncGrad4)
+    # pos_obs5, radius5 = model.obstacles[5][1], model.obstacles[5][2]
+    # obsPotFunc5     = (p1,p2)    -> obstacle_potentialSphere_penalty(     model,    [p1,p2], pos_obs5, radius5, alpha)
+    # obsPotFuncGrad5 = (g, p1,p2) -> obstacle_potentialSphere_penalty_grad(model, g, [p1,p2], pos_obs5, radius5, alpha)
+    # register(solver_model, :obsPotFunc5, 2, obsPotFunc5, obsPotFuncGrad5)
+    # pos_obs6, radius6 = model.obstacles[6][1], model.obstacles[6][2]
+    # obsPotFunc6     = (p1,p2)    -> obstacle_potentialSphere_penalty(     model,    [p1,p2], pos_obs6, radius6, alpha)
+    # obsPotFuncGrad6 = (g, p1,p2) -> obstacle_potentialSphere_penalty_grad(model, g, [p1,p2], pos_obs6, radius6, alpha)
+    # register(solver_model, :obsPotFunc6, 2, obsPotFunc6, obsPotFuncGrad6)
 end
 function obstacle_potential_penalties(model::DubinsFree, solver_model, 
                                     X, U, Xp, Up, 
@@ -452,18 +452,18 @@ function obstacle_potential_penalties(model::DubinsFree, solver_model,
     elseif obs_i == 2
       @NLexpression(solver_model, obscost2, (X[end,end]/(N-1))*sum(obsPotFunc2(X[1,k],X[2,k]) for k in 1:N))
       return obscost2
-    elseif obs_i == 3
-      @NLexpression(solver_model, obscost3, (X[end,end]/(N-1))*sum(obsPotFunc3(X[1,k],X[2,k]) for k in 1:N))
-      return obscost3
-    elseif obs_i == 4
-      @NLexpression(solver_model, obscost4, (X[end,end]/(N-1))*sum(obsPotFunc4(X[1,k],X[2,k]) for k in 1:N))
-      return obscost4
-    elseif obs_i == 5
-      @NLexpression(solver_model, obscost5, (X[end,end]/(N-1))*sum(obsPotFunc5(X[1,k],X[2,k]) for k in 1:N))
-      return obscost5
-    elseif obs_i == 6
-      @NLexpression(solver_model, obscost6, (X[end,end]/(N-1))*sum(obsPotFunc6(X[1,k],X[2,k]) for k in 1:N))
-      return obscost6
+    # elseif obs_i == 3
+    #   @NLexpression(solver_model, obscost3, (X[end,end]/(N-1))*sum(obsPotFunc3(X[1,k],X[2,k]) for k in 1:N))
+    #   return obscost3
+    # elseif obs_i == 4
+    #   @NLexpression(solver_model, obscost4, (X[end,end]/(N-1))*sum(obsPotFunc4(X[1,k],X[2,k]) for k in 1:N))
+    #   return obscost4
+    # elseif obs_i == 5
+    #   @NLexpression(solver_model, obscost5, (X[end,end]/(N-1))*sum(obsPotFunc5(X[1,k],X[2,k]) for k in 1:N))
+    #   return obscost5
+    # elseif obs_i == 6
+    #   @NLexpression(solver_model, obscost6, (X[end,end]/(N-1))*sum(obsPotFunc6(X[1,k],X[2,k]) for k in 1:N))
+    #   return obscost6
     else
       print("obs_i=$obs_i")
       throw(MethodError("[DubinsFree.jl::obstacle_potential_penalty] Incorrect number of obstacles."))
@@ -488,7 +488,7 @@ end
 
 function shooting_solve(p0::Vector, tf_guess::Float64,
                         N::Int, model::DubinsFree; 
-                        tol_newton=1e-2, tol_hybrd = 1e-6,
+                        tol_newton=1e-1, tol_hybrd = 1e-6,
                         B_RK4::Bool=false, B_HYBRD::Bool=true, B_verbose=true)
   x_dim, u_dim = model.x_dim, model.u_dim
   x0, xF       = model.x_init, model.x_final
@@ -507,7 +507,7 @@ function shooting_solve(p0::Vector, tf_guess::Float64,
 
   if !B_HYBRD
     # Run Newton method
-    sol_newton = nlsolve(shooting_eval!, [p0;tf_guess], iterations=20, ftol=tol_newton)
+    sol_newton = nlsolve(shooting_eval!, [p0;tf_guess], iterations=10, ftol=tol_newton)
     # sol_newton = nlsolve(shooting_eval!, [p0;tf_guess], ftol=tol_newton)
     p0_tf_solution = sol_newton.zero
     if B_verbose
@@ -654,6 +654,11 @@ function parameterized_shooting_eval_RK4!(F::Vector,
       xf = traj_end[1:3]
       pf = traj_end[4:6]
       uf = (pf[3]*k/2.)
+      if uf>model.uMax[1]
+        uf=model.uMax[1]
+      elseif uf<model.uMin[1]
+        uf=model.uMin[1]
+      end
       ff = [v * cos(xf[3]), v * sin(xf[3]), k * uf] #f_dyn(xf, [uf], model)
       Hf = sum(pf[i]*ff[i] for i in 1:3) - uf^2
 
@@ -710,6 +715,11 @@ function dynamics_shooting!(f::Vector, x::Vector, p::Vector, tf::Float64,
                             model::DubinsFree)
     v, k = model.v, model.k
     uopt = ( p[3]*k / 2.)
+    if uopt>model.uMax[1]
+      uopt=model.uMax[1]
+    elseif uopt<model.uMin[1]
+      uopt=model.uMin[1]
+    end
 
     f[1] = v * cos(x[3])
     f[2] = v * sin(x[3])
